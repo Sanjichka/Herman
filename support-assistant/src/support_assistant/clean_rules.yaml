@@ -1,0 +1,80 @@
+# Cleanup rules for manuals converted from Word with markitdown.
+# The script (src/clean_manual.py) handles generic conversion junk on its own.
+# This file holds the manual-specific fixes. Add to it as you find new problems.
+# Everything here is plain find-and-replace, applied in the order written.
+
+# 1. Exact text fixes, always applied.
+#    Garbled machine translation and conversion errors. Case-sensitive.
+fixes:
+  "Click on And": "Click Yes"
+  "click on it trash icon and choose And": "click on the trash icon and choose Yes"
+  "and choose And": "and choose Yes"
+  "ANDr a certain percentage": "A certain percentage"
+  "DThe group name": "The group name"
+  "INif the field": "If the field"
+  "THEIn order": "In order"
+  "Dit means": "This means"
+  "Bee Maintenance": "Under Maintenance"
+  "[woke up]": "[Vektis]"
+  "woke up": "Vektis"
+  " (Nog doen)": ""
+  "Company Registration IF": "Company Registration ID"
+  "Srbjia": "Serbia"
+  "Srbija": "Serbia"
+  "Examination Typess": "Examination Types"
+  "tone examination views": "show examination view"
+  "the rate will only increase MedicalPortal be chosen": "the rate will only be chosen by MedicalPortal"
+  "Of price matrix record has been changed": "The price matrix record has been changed"
+  "The new one price matrix record": "The new price matrix record"
+  "can continue immediately MedicalPortal be used": "can be used in MedicalPortal immediately"
+  "Fill one *name* in": "Fill in a *name*"
+  "Select one *": "Select a *"
+  "Marge (cm)": "Margin (cm)"
+  "Put a new resource": "Create a new resource"
+  "MedicalPortal furnishings": "MedicalPortal."
+  "Click the button + Template top right": "Click the + Template button at the top right"
+  "Click at the top right + Currency Exchange": "Click at the top right + VAT"
+  "Click on it ": "Click on the "
+  "click on it ": "click on the "
+  "Through it ": "Through the "
+  "With it ": "With the "
+
+# 2. Heading renames. Fixes headings that are wrong, untranslated or misleading.
+#    level = number of # signs; nth = which occurrence (optional, default: all).
+heading_renames:
+  - {level: 2, old: "Release concepts", new: "Release messages"}
+  - {level: 2, old: "Currency Exchange", new: "VAT"}
+  - {level: 2, old: "Roosters", new: "Schedules"}
+  - {level: 2, old: "Resources & Resourceweergaven", new: "Resources & Resource views"}
+  - {level: 3, old: "Examination segments", new: "Segment summary"}
+  - {level: 3, old: "How to adjust/delete a PMO?", new: "How to adjust/delete a PCMO?", nth: 2}
+  - {level: 3, old: "The Departments", new: "Departments of external organizations"}
+  - {level: 3, old: "Recipe Maintenance", new: "Prescription settings"}
+  - {level: 3, old: "Set of research display templates", new: "Examination view templates"}
+  - {level: 3, old: "Maps of HL7 ORU messages", new: "Mapping HL7 ORU messages"}
+  - {level: 3, old: "Add diagnostics manually", new: "Add diagnoses manually"}
+  - {level: 2, old: "Add new survey type", new: "Add new examination type"}
+  - {level: 2, old: "Recurring promotions for the new year", new: "Recurring actions for the new year"}
+
+# 3. Terminology. Only REPORTED by default (counts per term).
+#    Run with --apply-terms to replace them. Longer phrases first.
+#    Whole words only; capitalization of the first letter is preserved.
+terms:
+  "recipe maintenance": "prescription settings"
+  "recipe": "prescription"
+  "recipes": "prescriptions"
+  "survey type": "examination type"
+  "survey types": "examination types"
+  "survey view": "examination view"
+  "survey": "examination"
+  "surveys": "examinations"
+  "study views": "examination views"
+  "studies": "examinations"
+  "study": "examination"
+  "investigations": "examinations"
+  "investigation": "examination"
+  "recordings": "admissions"
+  "recording": "admission"
+
+# 4. Words that suggest untranslated Dutch. Only reported, never changed.
+dutch_words: [nog, doen, wan, weergaven, roosters, afspraak, onderzoek, zorg, ter, bij, "let op"]

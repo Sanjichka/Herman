@@ -1,0 +1,25 @@
+[project]
+name = "support-assistant"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { email = "sanjavasil@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "markitdown[all]>=0.1.8",
+    "openai>=3.19.2",
+    "pgvector>=0.5.0",
+    "psycopg[binary]>=3.3.6",
+    "python-dotenv>=1.2.3",
+    "pyyaml>=6.0.3",
+    "streamlit>=1.40",
+]
+
+[project.scripts]
+support-assistant = "support_assistant:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
