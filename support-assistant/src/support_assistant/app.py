@@ -26,7 +26,7 @@ for q, result in st.session_state.history:
     st.chat_message("user").write(q)
     with st.chat_message("assistant"):
         st.write(result["answer"])
-        if not result["refused"] and result["chunks"]:
+        if result["chunks"]:
             with st.expander(f"Sources ({len(result['chunks'])})"):
                 for chunk in result["chunks"]:
                     path = " > ".join(chunk.get("section_path", [chunk.get("section_title", "")]))
@@ -39,7 +39,7 @@ if question:
         with st.spinner("Searching manual..."):
             result = ask(question)
         st.write(result["answer"])
-        if not result["refused"] and result["chunks"]:
+        if result["chunks"]:
             with st.expander(f"Sources ({len(result['chunks'])})"):
                 for chunk in result["chunks"]:
                     path = " > ".join(chunk.get("section_path", [chunk.get("section_title", "")]))
