@@ -66,7 +66,7 @@ def ask(question: str, k: int = 5, threshold: float = SIMILARITY_THRESHOLD) -> d
 
     answer = response.choices[0].message.content.strip()
     refused = answer.startswith("I don't have enough information")
-    return {"answer": answer, "chunks": chunk_metas if not refused else [], "refused": refused}
+    return {"answer": answer, "chunks": chunk_metas, "refused": refused}
 
 
 def main():
