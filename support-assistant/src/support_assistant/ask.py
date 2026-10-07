@@ -1,6 +1,10 @@
 """
 RAG answer: retrieve relevant chunks, then generate a grounded answer.
 
+The flow is a LangGraph graph with three nodes:
+  retrieve → filter_chunks → generate
+filter_chunks short-circuits to a refusal if no chunks pass the threshold.
+
 Usage (CLI):
     uv run python src/support_assistant/ask.py "How do I add a VAT percentage?"
     uv run python src/support_assistant/ask.py "reset a password" --k 8 --threshold 0.40
@@ -8,51 +12,71 @@ Usage (CLI):
 
 import argparse
 import os
+from typing import TypedDict
 
+from langgraph.graph import END, START, StateGraph
 from openai import OpenAI
 
 from search import search
 
 SIMILARITY_THRESHOLD = 0.35
 GENERATION_MODEL = "gpt-4o-mini"
+REFUSAL = "I don't have enough information to answer that. Please contact your support team."
 
 SYSTEM_PROMPT = """\
 You are Herman, a support assistant for a medical software product.
 You answer questions using ONLY the manual excerpts provided below.
 Rules:
 - Cite the manual section (e.g. "According to Finance > VAT > Add VAT percentage, ...") in every factual sentence.
-- If the provided excerpts do not contain enough information to answer, respond with exactly:
+- You may use your general knowledge only to interpret terminology and match
+  synonyms. Never use it to add facts, steps or instructions not present in the excerpts.
+- If after interpreting terminology the excerpts still do not contain enough
+  information to answer, respond with exactly:
   "I don't have enough information to answer that. Please contact your support team."
-- Never guess or infer beyond what the excerpts say.
 - Be concise and direct.
 """
 
 
-def ask(question: str, k: int = 5, threshold: float = SIMILARITY_THRESHOLD) -> dict:
-    """
-    Returns {"answer": str, "chunks": list[dict], "refused": bool}
-    """
-    results = search(question, k=k)
+class RAGState(TypedDict):
+    question: str
+    k: int
+    threshold: float
+    raw_chunks: list
+    passing_chunks: list
+    answer: str
+    refused: bool
 
-    # Filter by similarity threshold
-    passing = [(id_, content, meta, score) for id_, content, meta, score in results if score >= threshold]
 
+def retrieve(state: RAGState) -> dict:
+    results = search(state["question"], k=state["k"])
+    return {"raw_chunks": results}
+
+
+def filter_chunks(state: RAGState) -> dict:
+    passing = [
+        (id_, content, meta, score)
+        for id_, content, meta, score in state["raw_chunks"]
+        if score >= state["threshold"]
+    ]
     if not passing:
         return {
-            "answer": "I don't have enough information to answer that. Please contact your support team.",
-            "chunks": [],
+            "passing_chunks": [],
+            "answer": REFUSAL,
             "refused": True,
         }
+    return {"passing_chunks": passing}
 
+
+def generate(state: RAGState) -> dict:
     context_blocks = []
     chunk_metas = []
-    for _, content, meta, score in passing:
+    for _, content, meta, score in state["passing_chunks"]:
         section = " > ".join(meta.get("section_path", [meta.get("section_title", "Unknown")]))
         context_blocks.append(f"[{section}]\n{content}")
         chunk_metas.append({**meta, "score": score})
 
     context = "\n\n---\n\n".join(context_blocks)
-    user_message = f"Manual excerpts:\n\n{context}\n\n---\n\nQuestion: {question}"
+    user_message = f"Manual excerpts:\n\n{context}\n\n---\n\nQuestion: {state['question']}"
 
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
@@ -66,7 +90,46 @@ def ask(question: str, k: int = 5, threshold: float = SIMILARITY_THRESHOLD) -> d
 
     answer = response.choices[0].message.content.strip()
     refused = answer.startswith("I don't have enough information")
-    return {"answer": answer, "chunks": chunk_metas, "refused": refused}
+    return {"answer": answer, "refused": refused, "passing_chunks": chunk_metas}
+
+
+def _route_after_filter(state: RAGState) -> str:
+    return "generate" if state["passing_chunks"] else END
+
+
+def _build_graph():
+    g = StateGraph(RAGState)
+    g.add_node("retrieve", retrieve)
+    g.add_node("filter_chunks", filter_chunks)
+    g.add_node("generate", generate)
+    g.add_edge(START, "retrieve")
+    g.add_edge("retrieve", "filter_chunks")
+    g.add_conditional_edges("filter_chunks", _route_after_filter)
+    g.add_edge("generate", END)
+    return g.compile()
+
+
+_graph = _build_graph()
+
+
+def ask(question: str, k: int = 5, threshold: float = SIMILARITY_THRESHOLD) -> dict:
+    """
+    Returns {"answer": str, "chunks": list[dict], "refused": bool}
+    """
+    result = _graph.invoke({
+        "question": question,
+        "k": k,
+        "threshold": threshold,
+        "raw_chunks": [],
+        "passing_chunks": [],
+        "answer": "",
+        "refused": False,
+    })
+    return {
+        "answer": result["answer"],
+        "chunks": result["passing_chunks"],
+        "refused": result["refused"],
+    }
 
 
 def main():
