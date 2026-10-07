@@ -12,11 +12,13 @@ Usage (CLI):
 
 import argparse
 import os
+import re
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from openai import OpenAI
 
+from common import get_conn
 from search import search
 
 SIMILARITY_THRESHOLD = 0.35
@@ -71,6 +73,45 @@ def filter_chunks(state: RAGState) -> dict:
     return {"passing_chunks": passing}
 
 
+def expand_references(state: RAGState) -> dict:
+    """
+    Scan retrieved chunks for (see: Section Name) cross-references and
+    fetch those sections from the DB, so the LLM sees the full picture
+    when an answer spans multiple manual sections.
+    """
+    existing_ids = {row[0] for row in state["passing_chunks"]}
+    refs = set()
+    for _, content, _, _ in state["passing_chunks"]:
+        for match in re.finditer(r"\(see:\s*([^)]+)\)", content, re.IGNORECASE):
+            refs.add(match.group(1).strip())
+
+    if not refs:
+        return {}
+
+    extra = []
+    with get_conn() as conn:
+        for ref in refs:
+            rows = conn.execute(
+                """
+                SELECT id, content, metadata, 0.0 AS score
+                FROM vector_store
+                WHERE (metadata->'section_path') @> to_jsonb(%s::text)
+                   OR metadata->>'section_title' ILIKE %s
+                ORDER BY (metadata->>'tokens')::int DESC
+                LIMIT 3
+                """,
+                [ref, ref],
+            ).fetchall()
+            for row in rows:
+                if row[0] not in existing_ids:
+                    extra.append(row)
+                    existing_ids.add(row[0])
+
+    if not extra:
+        return {}
+    return {"passing_chunks": state["passing_chunks"] + extra}
+
+
 def generate(state: RAGState) -> dict:
     context_blocks = []
     chunk_metas = []
@@ -98,17 +139,19 @@ def generate(state: RAGState) -> dict:
 
 
 def _route_after_filter(state: RAGState) -> str:
-    return "generate" if state["passing_chunks"] else END
+    return "expand_references" if state["passing_chunks"] else END
 
 
 def _build_graph():
     g = StateGraph(RAGState)
     g.add_node("retrieve", retrieve)
     g.add_node("filter_chunks", filter_chunks)
+    g.add_node("expand_references", expand_references)
     g.add_node("generate", generate)
     g.add_edge(START, "retrieve")
     g.add_edge("retrieve", "filter_chunks")
     g.add_conditional_edges("filter_chunks", _route_after_filter)
+    g.add_edge("expand_references", "generate")
     g.add_edge("generate", END)
     return g.compile()
 
