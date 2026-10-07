@@ -88,19 +88,23 @@ def expand_references(state: RAGState) -> dict:
     if not refs:
         return {}
 
+    from common import embed, to_pgvector
+    question_vec = to_pgvector(embed([state["question"]])[0])
+
     extra = []
     with get_conn() as conn:
         for ref in refs:
             rows = conn.execute(
                 """
-                SELECT id, content, metadata, 0.0 AS score
+                SELECT id, content, metadata,
+                       1 - (embedding <=> %s::vector) AS score
                 FROM vector_store
                 WHERE (metadata->'section_path') @> to_jsonb(%s::text)
                    OR metadata->>'section_title' ILIKE %s
-                ORDER BY (metadata->>'tokens')::int DESC
-                LIMIT 3
+                ORDER BY score DESC
+                LIMIT 4
                 """,
-                [ref, ref],
+                [question_vec, ref, ref],
             ).fetchall()
             for row in rows:
                 if row[0] not in existing_ids:
