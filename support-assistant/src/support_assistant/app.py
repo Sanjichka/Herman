@@ -13,14 +13,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import streamlit as st
-from ask import SIMILARITY_THRESHOLD, ask
-from search import search
+from ask import ask
 
 st.set_page_config(page_title="Herman – Support Assistant", page_icon="🏥", layout="centered")
 st.title("Herman – Support Assistant")
 st.caption("Ask a question about the software. Answers are drawn from the product manual.")
-
-raw_mode = st.toggle("Raw retrieval (no LLM)", value=False)
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -39,25 +36,12 @@ question = st.chat_input("Ask a question about the software...")
 if question:
     st.chat_message("user").write(question)
     with st.chat_message("assistant"):
-        if raw_mode:
-            with st.spinner("Retrieving chunks..."):
-                chunks = search(question)
-                passing = [(id_, content, meta, score) for id_, content, meta, score in chunks if score >= SIMILARITY_THRESHOLD]
-            if not passing:
-                st.warning("No chunks above similarity threshold.")
-            else:
-                _, content, meta, score = passing[0]
-                path = " > ".join(meta.get("section_path", [meta.get("section_title", "Unknown")]))
-                st.caption(f"{path} — score {score:.3f}")
-                st.markdown(content)
-            result = {"answer": "", "chunks": [], "refused": False}
-        else:
-            with st.spinner("Searching manual..."):
-                result = ask(question)
-            st.write(result["answer"])
-            if result["chunks"]:
-                with st.expander(f"Sources ({len(result['chunks'])})"):
-                    for chunk in result["chunks"]:
-                        path = " > ".join(chunk.get("section_path", [chunk.get("section_title", "")]))
-                        st.write(f"**{path}** — score {chunk['score']:.2f}")
+        with st.spinner("Searching manual..."):
+            result = ask(question)
+        st.write(result["answer"])
+        if result["chunks"]:
+            with st.expander(f"Sources ({len(result['chunks'])})"):
+                for chunk in result["chunks"]:
+                    path = " > ".join(chunk.get("section_path", [chunk.get("section_title", "")]))
+                    st.write(f"**{path}** — score {chunk['score']:.2f}")
     st.session_state.history.append((question, result))
