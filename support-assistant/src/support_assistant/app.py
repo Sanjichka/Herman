@@ -46,11 +46,10 @@ if question:
             if not passing:
                 st.warning("No chunks above similarity threshold.")
             else:
-                for i, (_, content, meta, score) in enumerate(passing, 1):
-                    path = " > ".join(meta.get("section_path", [meta.get("section_title", "Unknown")]))
-                    st.markdown(f"**[{i}] {score:.3f} — {path}**")
-                    st.markdown(content)
-                    st.divider()
+                _, content, meta, score = passing[0]
+                path = " > ".join(meta.get("section_path", [meta.get("section_title", "Unknown")]))
+                st.caption(f"{path} — score {score:.3f}")
+                st.markdown(content)
             result = {"answer": "", "chunks": [], "refused": False}
         else:
             with st.spinner("Searching manual..."):
