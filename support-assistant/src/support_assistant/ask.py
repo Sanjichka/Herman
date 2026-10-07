@@ -137,7 +137,19 @@ def main():
     ap.add_argument("question")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--threshold", type=float, default=SIMILARITY_THRESHOLD)
+    ap.add_argument("--raw", action="store_true", help="print retrieved chunks without LLM generation")
     args = ap.parse_args()
+
+    if args.raw:
+        chunks = search(args.question, k=args.k)
+        passing = [(id_, content, meta, score) for id_, content, meta, score in chunks if score >= args.threshold]
+        if not passing:
+            print("No chunks above threshold.")
+            return
+        for i, (_, content, meta, score) in enumerate(passing, 1):
+            path = " > ".join(meta.get("section_path", [meta.get("section_title", "Unknown")]))
+            print(f"[{i}] {score:.3f}  {path}\n{content}\n")
+        return
 
     result = ask(args.question, k=args.k, threshold=args.threshold)
     print(result["answer"])
