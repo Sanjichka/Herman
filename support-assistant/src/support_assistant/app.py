@@ -12,8 +12,11 @@ from pathlib import Path
 # Make sibling modules importable when run directly by Streamlit
 sys.path.insert(0, str(Path(__file__).parent))
 
+import uuid
+
 import streamlit as st
 from ask import ask
+from common import get_conn, log_conversation
 
 st.set_page_config(page_title="Herman – Support Assistant", page_icon="🏥", layout="centered")
 st.title("Herman – Support Assistant")
@@ -21,6 +24,16 @@ st.caption("Ask a question about the software. Answers are drawn from the produc
 
 if "history" not in st.session_state:
     st.session_state.history = []
+
+if "conversation_id" not in st.session_state:
+    conv_id = str(uuid.uuid4())
+    st.session_state.conversation_id = conv_id
+    try:
+        with get_conn() as conn:
+            conn.execute("INSERT INTO conversations (id) VALUES (%s::uuid)", (conv_id,))
+            conn.commit()
+    except Exception as exc:
+        print(f"[session init] failed: {exc}")
 
 for q, result in st.session_state.history:
     st.chat_message("user").write(q)
@@ -38,6 +51,7 @@ if question:
     with st.chat_message("assistant"):
         with st.spinner("Searching manual..."):
             result = ask(question)
+        log_conversation(st.session_state.conversation_id, question, result)
         st.write(result["answer"])
         if result["chunks"]:
             with st.expander(f"Sources ({len(result['chunks'])})"):

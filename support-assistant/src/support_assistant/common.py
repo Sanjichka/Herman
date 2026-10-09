@@ -77,3 +77,53 @@ except Exception:
 
 def n_tokens(text: str) -> int:
     return len(_enc.encode(text)) if _enc else len(text) // 4
+
+
+def log_conversation(conversation_id: str, question: str, result: dict) -> None:
+    """Persist one Q&A turn to messages + retrieval_events. Errors are printed, not raised."""
+    import uuid as _uuid
+
+    chunks = result.get("chunks", [])
+    refused = result.get("refused", False)
+
+    cited = list({
+        " > ".join(c.get("section_path", [c.get("section_title", "")]))
+        for c in chunks
+    }) or None
+
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO messages (conversation_id, role, content) VALUES (%s::uuid, 'user', %s)",
+                (conversation_id, question),
+            )
+
+            msg_id = str(_uuid.uuid4())
+            conn.execute(
+                """INSERT INTO messages (id, conversation_id, role, content, refused, cited_sections)
+                   VALUES (%s::uuid, %s::uuid, 'assistant', %s, %s, %s)""",
+                (msg_id, conversation_id, result["answer"], refused, cited),
+            )
+
+            for rank, chunk in enumerate(chunks, start=1):
+                conn.execute(
+                    """INSERT INTO retrieval_events
+                       (message_id, query_text, rank, score, threshold, above_threshold,
+                        chunk_id, source, section_id, chunking_version)
+                       VALUES (%s::uuid, %s, %s, %s, %s, true, %s::uuid, %s, %s, %s)""",
+                    (
+                        msg_id,
+                        question,
+                        rank,
+                        chunk.get("score"),
+                        0.35,
+                        chunk.get("id"),
+                        chunk.get("source"),
+                        " > ".join(chunk.get("section_path", [chunk.get("section_title", "")])),
+                        chunk.get("chunking_version"),
+                    ),
+                )
+
+            conn.commit()
+    except Exception as exc:
+        print(f"[log_conversation] failed: {exc}")
